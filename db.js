@@ -2,7 +2,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
 // TODO: Replace these with your actual Supabase URL and Publishable API Key
-const SUPABASE_URL = 'https://pwoaqqhfloivjazdext.supabase.co';
+const SUPABASE_URL = 'https://pwoaqqhfloivjazbdext.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_QmgZ32IJvOq3_Wv-6UFAVg_bdCdpkL7';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

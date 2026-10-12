@@ -79,7 +79,7 @@
     </footer>
 
     <script type="module" src="db.js"></script>
-    <script>
+    <script type="module">
         function populateGenres() {
             const novels = getNovels();
             const genres = [...new Set(novels.map(n => n.genre))];

@@ -79,30 +79,42 @@
 
     <script type="module" src="db.js"></script>
     <script type="module">
-        window.onload = function() {
-            initDatabase();
-            const params = new URLSearchParams(window.location.search);
-            const novelId = params.get('id');
-            const novels = getNovels();
-            const novel = novels.find(n => n.id === novelId);
+        window.onload = async function() {
+    await initDatabase();
+    const params = new URLSearchParams(window.location.search);
+    const novelId = params.get('id');
+    
+    // Await the asynchronous database fetch
+    const novels = await getNovels();
+    if (!Array.isArray(novels)) return;
+    
+    const novel = novels.find(n => n.id === novelId);
 
-            if (!novel) {
-                document.getElementById('reader-container').classList.add('hidden');
-                document.getElementById('not-found').classList.remove('hidden');
-                document.getElementById('not-found').classList.add('flex');
-                return;
-            }
+    if (!novel) {
+        document.getElementById('reader-container').classList.add('hidden');
+        document.getElementById('not-found').classList.remove('hidden');
+        document.getElementById('not-found').classList.add('flex');
+        return;
+    }
 
-            document.getElementById('reader-cover').src = novel.cover;
-            document.getElementById('reader-title').innerText = novel.title;
-            document.getElementById('reader-author').innerText = `By ${novel.author}`;
-            document.getElementById('reader-genre').innerText = novel.genre;
-            document.getElementById('reader-desc').innerText = novel.desc;
-            document.getElementById('reader-pdf-title').innerText = `${novel.title} - Document`;
+    // Populate fields safely
+    document.title = novel.title;
+    document.getElementById('novel-title').innerText = novel.title;
+    document.getElementById('novel-author').innerText = novel.author;
+    document.getElementById('novel-desc').innerText = novel.desc;
+    
+    const coverImg = document.getElementById('novel-cover');
+    if (novel.cover) {
+        coverImg.src = novel.cover;
+    } else {
+        coverImg.alt = "No Cover Available";
+    }
 
-            document.getElementById('pdf-frame').src = novel.pdf;
-            document.getElementById('download-link').href = novel.pdf;
-        };
+    const pdfFrame = document.getElementById('pdf-frame');
+    if (novel.pdf) {
+        pdfFrame.src = novel.pdf;
+    }
+};
     </script>
 </body>
 </html>

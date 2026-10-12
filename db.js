@@ -1,5 +1,13 @@
-const STORAGE_KEY = 'novelsphere_shared_db';
+// Import Supabase Client via CDN
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
+// TODO: Replace these with your actual Supabase URL and Publishable API Key
+const SUPABASE_URL = 'https://pwoaqqhfloivjazdext.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_QmgZ32IJvOq3_Wv-6UFAVg_bdCdpkL7';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Default fallback novel if database is empty
 const defaultNovels = [
     {
         id: "1",
@@ -12,35 +20,54 @@ const defaultNovels = [
     }
 ];
 
-function initDatabase() {
-    if (!localStorage.getItem(STORAGE_KEY)) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultNovels));
+async function initDatabase() {
+    try {
+        const { data, error } = await supabase.from('novels').select('*');
+        if (!error && (!data || data.length === 0)) {
+            await supabase.from('novels').insert(defaultNovels);
+        }
+    } catch (e) {
+        console.error("Database initialization error:", e);
     }
 }
 
-function getNovels() {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+async function getNovels() {
+    try {
+        const { data, error } = await supabase.from('novels').select('*');
+        if (error) throw error;
+        // Return latest items first
+        return data ? data.reverse() : [];
+    } catch (e) {
+        console.error('Error fetching novels:', e.message);
+        return [];
+    }
 }
 
-function saveNovel(novel) {
+async function saveNovel(novel) {
     try {
-        const novels = getNovels();
-        const existingIndex = novels.findIndex(n => n.id === novel.id);
-        if (existingIndex >= 0) {
-            novels[existingIndex] = novel;
-        } else {
-            novels.unshift(novel);
+        if (!novel.id) {
+            novel.id = Date.now().toString();
         }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(novels));
+        const { error } = await supabase.from('novels').upsert([novel]);
+        if (error) throw error;
         return true;
     } catch (e) {
-        alert("Storage limit exceeded! The PDF or image file is too large to save in browser storage. Please use a smaller file or a URL link instead.");
+        alert("Error saving novel to Supabase: " + e.message);
         return false;
     }
 }
 
-function removeNovel(id) {
-    let novels = getNovels();
-    novels = novels.filter(n => n.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(novels));
+async function removeNovel(id) {
+    try {
+        const { error } = await supabase.from('novels').delete().eq('id', id.toString());
+        if (error) throw error;
+    } catch (e) {
+        console.error('Error deleting novel:', e.message);
+    }
 }
+
+// Attach functions globally so your HTML pages can call them
+window.initDatabase = initDatabase;
+window.getNovels = getNovels;
+window.saveNovel = saveNovel;
+window.removeNovel = removeNovel;

@@ -23,10 +23,10 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .serif-title { font-family: 'Playfair Display', serif; }
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        .logo {width: 20%; cursor: pointer;}
+        .logo { width: 20%; cursor: pointer; }
     </style>
 </head>
 <body class="bg-darkBg text-slate-100 min-h-screen flex flex-col">
@@ -35,14 +35,22 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <a href="index.html" class="flex items-center space-x-3">
                 <img class="logo" src="img/riwayati.png" alt="riwayati logo">
-               
-                
             </a>
-            
         </div>
     </header>
 
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        
+        <!-- Continue Reading Section (Stremio Style) -->
+        <div id="continue-section" class="hidden space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="serif-title text-xl sm:text-2xl font-bold text-slate-100 flex items-center gap-2.5">
+                    <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Continue Reading
+                </h2>
+            </div>
+            <div id="continue-grid" class="flex gap-4 overflow-x-auto pb-4 pt-1"></div>
+        </div>
+
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-sm">
             <div>
                 <h1 class="serif-title text-3xl font-bold text-slate-100">Explore Novels</h1>
@@ -80,6 +88,51 @@
 
     <script type="module" src="db.js"></script>
     <script type="module">
+        async function renderContinueReading() {
+            const history = JSON.parse(localStorage.getItem('continue_reading') || '{}');
+            const keys = Object.keys(history);
+            if (keys.length === 0) return;
+
+            const novels = await getNovels();
+            if (!Array.isArray(novels)) return;
+
+            const continueSection = document.getElementById('continue-section');
+            const continueGrid = document.getElementById('continue-grid');
+            continueGrid.innerHTML = '';
+
+            let hasItems = false;
+            keys.sort((a, b) => history[b].timestamp - history[a].timestamp);
+
+            keys.forEach(id => {
+                const novel = novels.find(n => n.id === id);
+                if (novel) {
+                    hasItems = true;
+                    const page = history[id].page || 1;
+                    const card = document.createElement('a');
+                    card.href = `reader.html?id=${novel.id}`;
+                    card.className = "shrink-0 w-36 sm:w-44 bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden shadow-lg hover:border-indigo-500/50 transition-all duration-300 group flex flex-col";
+
+                    card.innerHTML = `
+                        <div class="h-44 sm:h-52 overflow-hidden relative bg-slate-800">
+                            <img src="${novel.cover}" alt="${novel.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent flex items-end p-2">
+                                <span class="text-[10px] bg-indigo-600/90 text-white px-2 py-0.5 rounded-md font-semibold backdrop-blur-sm">Page ${page}</span>
+                            </div>
+                        </div>
+                        <div class="p-3 bg-slate-900 flex-grow">
+                            <h4 class="font-bold text-xs text-slate-100 group-hover:text-indigo-400 transition-colors line-clamp-1">${novel.title}</h4>
+                            <p class="text-[10px] text-slate-400 mt-0.5">By ${novel.author}</p>
+                        </div>
+                    `;
+                    continueGrid.appendChild(card);
+                }
+            });
+
+            if (hasItems) {
+                continueSection.classList.remove('hidden');
+            }
+        }
+
         async function populateGenres() {
             const novels = await getNovels();
             if (!Array.isArray(novels)) return;
@@ -150,11 +203,11 @@
             renderGrid(filtered);
         }
 
-        // Expose filterNovels globally so HTML inline events can access it
         window.filterNovels = filterNovels;
 
         window.onload = async function() {
             await initDatabase();
+            await renderContinueReading();
             await populateGenres();
             await renderGrid();
         };

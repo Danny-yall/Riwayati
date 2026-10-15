@@ -24,9 +24,8 @@
         body { font-family: 'Inter', sans-serif; }
         .serif-title { font-family: 'Playfair Display', serif; }
         .logo { width: 20%; cursor: pointer; }
-        #pdf-render-container::-webkit-scrollbar { width: 6px; }
-        #pdf-render-container::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-        /* Hide spinner arrows on number input for clean look */
+        #pdf-scroll-container::-webkit-scrollbar { width: 6px; }
+        #pdf-scroll-container::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
         input[type=number]::-webkit-inner-spin-button, 
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     </style>
@@ -60,58 +59,40 @@
                 </div>
             </div>
 
-            <!-- In-App PDF Viewer Area (Canvas-Based) -->
+            <!-- Scrollable PDF Viewer Area -->
             <div class="lg:col-span-2 flex flex-col h-[650px] sm:h-[750px] bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-inner">
                 
-                <!-- Viewer Navigation Toolbar -->
+                <!-- Viewer Toolbar -->
                 <div class="bg-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-2 flex-wrap">
                     <div class="flex items-center space-x-2 text-slate-300 text-sm font-medium truncate">
                         <i class="fa-solid fa-book-open text-indigo-400"></i>
                         <span id="reader-pdf-title" class="truncate max-w-[130px] sm:max-w-xs">Reading...</span>
                     </div>
 
-                    <!-- Page Navigation Controls with Input Field -->
+                    <!-- Quick Page Jump Input -->
                     <div class="flex items-center space-x-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-                        <button id="prev-page" class="text-slate-300 hover:text-indigo-400 disabled:opacity-30 disabled:hover:text-slate-300 transition-colors px-1">
-                            <i class="fa-solid fa-chevron-left"></i>
-                        </button>
-                        
                         <div class="flex items-center space-x-1 text-xs text-slate-400 font-semibold">
                             <span>Page</span>
                             <input type="number" id="page-input" min="1" value="1" class="w-12 bg-slate-900 border border-slate-700 rounded-md py-0.5 text-center text-xs font-bold text-indigo-400 focus:outline-none focus:border-indigo-500">
                             <span>/ <span id="page-count">--</span></span>
                         </div>
-
-                        <button id="next-page" class="text-slate-300 hover:text-indigo-400 disabled:opacity-30 disabled:hover:text-slate-300 transition-colors px-1">
-                            <i class="fa-solid fa-chevron-right"></i>
-                        </button>
                     </div>
 
-                    <!-- External Link Fallback -->
                     <a id="download-link" href="#" target="_blank" class="text-slate-400 hover:text-slate-200 text-xs flex items-center gap-1 transition-colors">
                         <i class="fa-solid fa-external-link"></i> <span class="hidden sm:inline">Raw PDF</span>
                     </a>
                 </div>
 
-                <!-- PDF Canvas Render Container -->
-                <div id="pdf-render-container" class="flex-1 overflow-auto flex justify-center items-start p-4 bg-slate-950/50 relative">
+                <!-- Scrollable Container for All Pages -->
+                <div id="pdf-scroll-container" class="flex-1 overflow-auto flex flex-col items-center p-4 bg-slate-950/50 relative space-y-4">
                     <!-- Loading Spinner -->
                     <div id="pdf-loading" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/80 z-10 space-y-3">
                         <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-3xl"></i>
                         <span class="text-xs text-slate-400 font-medium">Loading PDF document...</span>
                     </div>
 
-                    <canvas id="pdf-canvas" class="shadow-2xl rounded-lg max-w-full"></canvas>
-                </div>
-
-                <!-- Touch Control Overlay for Mobile Tap Navigation -->
-                <div class="bg-slate-900/90 border-t border-slate-800 p-2.5 flex items-center justify-between text-xs sm:hidden">
-                    <button id="mobile-prev" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium mr-1 text-center">
-                        ← Previous
-                    </button>
-                    <button id="mobile-next" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium ml-1 text-center">
-                        Next Page →
-                    </button>
+                    <!-- All Canvases will be injected here dynamically -->
+                    <div id="canvas-wrapper" class="flex flex-col items-center space-y-4 w-full"></div>
                 </div>
             </div>
         </div>
@@ -131,12 +112,9 @@
 
         let currentNovelId = null;
         let pdfDoc = null;
-        let pageNum = 1;
-        let pageRendering = false;
-        let pageNumPending = null;
         const scale = 1.3;
-        const canvas = document.getElementById('pdf-canvas');
-        const ctx = canvas.getContext('2d');
+        const scrollContainer = document.getElementById('pdf-scroll-container');
+        const canvasWrapper = document.getElementById('canvas-wrapper');
 
         function saveProgress(page) {
             if (!currentNovelId) return;
@@ -148,75 +126,76 @@
             localStorage.setItem('continue_reading', JSON.stringify(history));
         }
 
-        function renderPage(num) {
-            pageRendering = true;
-            document.getElementById('pdf-loading').style.display = 'flex';
+        async function renderAllPages() {
+            canvasWrapper.innerHTML = '';
+            const numPages = pdfDoc.numPages;
+            document.getElementById('page-count').textContent = numPages;
 
-            pdfDoc.getPage(num).then(page => {
+            for (let i = 1; i <= numPages; i++) {
+                const page = await pdfDoc.getPage(i);
                 const viewport = page.getViewport({ scale: scale });
+
+                const canvas = document.createElement('canvas');
+                canvas.className = "shadow-2xl rounded-lg max-w-full mb-4 pdf-page-canvas";
+                canvas.dataset.pageNumber = i;
+                const context = canvas.getContext('2d');
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
 
-                const renderContext = {
-                    canvasContext: ctx,
-                    viewport: viewport
-                };
-                const renderTask = page.render(renderContext);
+                canvasWrapper.appendChild(canvas);
 
-                renderTask.promise.then(() => {
-                    pageRendering = false;
-                    document.getElementById('pdf-loading').style.display = 'none';
-                    if (pageNumPending !== null) {
-                        renderPage(pageNumPending);
-                        pageNumPending = null;
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+            }
+
+            document.getElementById('pdf-loading').style.display = 'none';
+
+            // Jump to initial page if saved
+            let history = JSON.parse(localStorage.getItem('continue_reading') || '{}');
+            let startPage = history[currentNovelId]?.page || 1;
+            if (startPage > numPages) startPage = 1;
+            
+            document.getElementById('page-input').value = startPage;
+            scrollToPage(startPage, false);
+
+            // Track scroll position to update current page & save progress
+            scrollContainer.addEventListener('scroll', () => {
+                const canvases = canvasWrapper.querySelectorAll('.pdf-page-canvas');
+                let closestPage = 1;
+                let minDistance = Infinity;
+
+                canvases.forEach(canvas => {
+                    const rect = canvas.getBoundingClientRect();
+                    const containerRect = scrollContainer.getBoundingClientRect();
+                    const distance = Math.abs(rect.top - containerRect.top);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestPage = parseInt(canvas.dataset.pageNumber);
                     }
                 });
-            });
 
-            pageNum = num;
-            document.getElementById('page-input').value = num;
-            saveProgress(num);
-            updateButtons();
+                document.getElementById('page-input').value = closestPage;
+                saveProgress(closestPage);
+            });
         }
 
-        function queueRenderPage(num) {
-            if (pageRendering) {
-                pageNumPending = num;
-            } else {
-                renderPage(num);
+        function scrollToPage(pageNum, smooth = true) {
+            const targetCanvas = canvasWrapper.querySelector(`[data-page-number="${pageNum}"]`);
+            if (targetCanvas) {
+                targetCanvas.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
             }
         }
 
-        function onPrevPage() {
-            if (pageNum <= 1) return;
-            queueRenderPage(pageNum - 1);
-        }
-
-        function onNextPage() {
-            if (pageNum >= pdfDoc.numPages) return;
-            queueRenderPage(pageNum + 1);
-        }
-
-        function updateButtons() {
-            const prevBtn = document.getElementById('prev-page');
-            const nextBtn = document.getElementById('next-page');
-            if (prevBtn) prevBtn.disabled = pageNum <= 1;
-            if (nextBtn) nextBtn.disabled = pageNum >= pdfDoc.numPages;
-        }
-
-        document.getElementById('prev-page').addEventListener('click', onPrevPage);
-        document.getElementById('next-page').addEventListener('click', onNextPage);
-        document.getElementById('mobile-prev').addEventListener('click', onPrevPage);
-        document.getElementById('mobile-next').addEventListener('click', onNextPage);
-
-        // Handle direct page input change or pressing Enter
+        // Handle page input jump
         const pageInput = document.getElementById('page-input');
         pageInput.addEventListener('change', function() {
             let requestedPage = parseInt(this.value);
             if (isNaN(requestedPage)) return;
             if (requestedPage < 1) requestedPage = 1;
             if (requestedPage > pdfDoc.numPages) requestedPage = pdfDoc.numPages;
-            queueRenderPage(requestedPage);
+            scrollToPage(requestedPage);
         });
 
         pageInput.addEventListener('keydown', function(e) {
@@ -226,7 +205,7 @@
                 if (!isNaN(requestedPage)) {
                     if (requestedPage < 1) requestedPage = 1;
                     if (requestedPage > pdfDoc.numPages) requestedPage = pdfDoc.numPages;
-                    queueRenderPage(requestedPage);
+                    scrollToPage(requestedPage);
                 }
             }
         });
@@ -250,9 +229,6 @@
                 return;
             }
 
-            let history = JSON.parse(localStorage.getItem('continue_reading') || '{}');
-            pageNum = history[novelId]?.page || 1;
-
             document.getElementById('reader-cover').src = novel.cover;
             document.getElementById('reader-title').innerText = novel.title;
             document.getElementById('reader-author').innerText = `By ${novel.author}`;
@@ -263,11 +239,7 @@
 
             pdfjsLib.getDocument(novel.pdf).promise.then(pdfDoc_ => {
                 pdfDoc = pdfDoc_;
-                document.getElementById('page-count').textContent = pdfDoc.numPages;
-                
-                if (pageNum > pdfDoc.numPages) pageNum = 1;
-                
-                renderPage(pageNum);
+                renderAllPages();
             }).catch(err => {
                 console.error("PDF Load Error: ", err);
                 document.getElementById('pdf-loading').innerHTML = `
